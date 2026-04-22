@@ -11,6 +11,7 @@ from app.infrastructure.database.models.rating import RatingEntry, RatingSnapsho
 from app.core.services.import_service import ImportService
 from app.core.services.rating_calculator import RatingCalculatorService
 from app.core.exceptions import ImportValidationError
+from app.schemas.rating import RatingEntryCreate
 
 router = APIRouter(prefix="/ratings", tags=["ratings"])
 
@@ -166,15 +167,13 @@ async def import_ratings_csv(
         "status_url": f"/api/v1/ratings/snapshots/{period}",
     }
 
-
 @router.post("/", status_code=201)
 async def create_rating_entry(
-    data: dict,
+    data: RatingEntryCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    entry = RatingEntry(**data)
+    entry = RatingEntry(**data.model_dump())
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
     return {"id": str(entry.id)}
-

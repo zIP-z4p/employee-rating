@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,
 )
 from sqlalchemy.pool import NullPool
+from sqlalchemy import text
 
 from app.main import app
 from app.api.deps import get_db, get_cache
@@ -18,15 +19,8 @@ from app.infrastructure.database.models import (  # noqa — регистрац�
 )
 
 TEST_DATABASE_URL = (
-    "postgresql+asyncpg://test_user:test_pass@localhost:5433/test_rating_db"
+    "postgresql+asyncpg://rating_user:rating_pass_local@postgres:5432/rating_test_db"
 )
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -36,12 +30,12 @@ async def test_engine():
         poolclass=NullPool,
     )
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
-
 
 @pytest_asyncio.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
@@ -49,9 +43,23 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         test_engine, class_=AsyncSession, expire_on_commit=False
     )
     async with async_session() as session:
-        yield session
-        await session.rollback()
+        # Важно: очистка БД перед каждым тестом
+        # CASCADE чтобы очищались зависимые таблицы
+        await session.execute(text("""
+            TRUNCATE TABLE
+                rating_entries,
+                rating_snapshots,
+                rating_metrics,
+                employees,
+                departments
+            RESTART IDENTITY CASCADE;
+        """))
+        await session.commit()
 
+        yield session
+
+        # На всякий случай откат незакоммиченного
+        await session.rollback()
 
 @pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
