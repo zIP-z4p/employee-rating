@@ -1,3 +1,4 @@
+```text
 employee-rating/
 ├── backend/                  # Backend приложение (FastAPI)
 ├── frontend/                 # Frontend приложение (React/Vite)
